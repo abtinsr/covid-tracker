@@ -1,0 +1,9 @@
+{
+    "path" : "~/DN-R/covid-19-tracker",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}
