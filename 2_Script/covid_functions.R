@@ -15,7 +15,6 @@ library(data.table)
 library(reshape2) # TURN COLUMNS/FIELDS INTO ROWS - SWITCH POSITION WITH RESHAPE2
 library(lubridate) # FIX THE RUBBISH DATES INTO PROPER ONES WITH LUBRIDATE
 
-
 ######################################################
 ##### IMPORTING AND EXPORTING DATA
 ######################################################
@@ -61,7 +60,7 @@ getRegionalData <- function() {
 ######################################################
 getPopulationData <- function() {
   table_populations <- 
-    read.csv("Data/worldBank_population.csv", 
+    read.csv("1_Data/worldBank_population.csv", 
              fill = TRUE, 
              header = TRUE,
              stringsAsFactors = TRUE,
@@ -87,7 +86,7 @@ getPopulationData <- function() {
 ######################################################
 getDensityData <- function() {
   table_density <- 
-    read.csv("Data/worldBank_popDensity.csv", 
+    read.csv("1_Data/worldBank_popDensity.csv", 
              fill = TRUE, 
              header = TRUE,
              stringsAsFactors = TRUE,
@@ -117,7 +116,7 @@ getDensityData <- function() {
 ######################################################
 getDemographicsData <- function() {
   table_demographics <-
-    read.csv("Data/worldBank_pop65.csv", 
+    read.csv("1_Data/worldBank_pop65.csv", 
            fill = TRUE, 
            header = TRUE,
            stringsAsFactors = TRUE,
@@ -179,48 +178,47 @@ cleanData <- function(data) {
 ######################################################
 ##### CORRECT FAULTY DATA POINTS
 ######################################################
-# Haven't learnt how to write dplyr functions... 
 # Dates are written on American structure... 
 
 # FAULTS IN CONFIRMED CASES DATA
 
-confirmedCasesCorrections <- function() {
+confirmedCasesCorrections <- function(data) {
   
-  tempData <- confirmed_table %>% 
+  tempData <- data %>% 
     filter(Country == "Italy") %>% 
     mutate(`3-12-20` = 15113)
-  confirmed_table[confirmed_table$Country == "Italy",] <- tempData
+  data[data$Country == "Italy",] <- tempData
   
-  tempData <- confirmed_table %>% 
+  tempData <- data %>% 
     filter(Country == "Spain") %>% 
     mutate(`3-12-20` = 2965)
-  confirmed_table[confirmed_table$Country == "Spain",] <- tempData
+  data[data$Country == "Spain",] <- tempData
   
-  return(confirmed_table)
+  return(data)
 }
 
-deathsCorrections <- function() {
+deathsCorrections <- function(data) {
   
   # Fel i Islandsdata - justerat så att 15 mars har 0 dödsfall och 20 mars har 1 dödsfall.
-  tempData <- deaths_table %>% 
+  tempData <- data %>% 
     filter(Country == "Iceland") %>% 
     mutate(`3-15-20` = 0,
            `3-20-20` = 1)
-  deaths_table[deaths_table$Country == "Iceland",] <- tempData
+  data[data$Country == "Iceland",] <- tempData
   
   # Fel i Italiendata - justerat så att 12 mars har 1016 dödsfall och 15113 bekräftade fall (WHO-data)
-  tempData <- deaths_table %>% 
+  tempData <- data %>% 
     filter(Country == "Italy") %>% 
     mutate(`3-12-20` = 1016)
-  deaths_table[deaths_table$Country == "Italy",] <- tempData
+  data[data$Country == "Italy",] <- tempData
   
   # Fel i Spaniendata - justerat så att 12 mars har 84 dödsfall och 2965 bekräftade fall (WHO-data)
-  tempData <- deaths_table %>% 
+  tempData <- data %>% 
     filter(Country == "Spain") %>% 
     mutate(`3-12-20` = 84)
-  deaths_table[deaths_table$Country == "Spain",] <- tempData
+  data[data$Country == "Spain",] <- tempData
   
-  return(deaths_table)
+  return(data)
 }
 
 ######################################################
@@ -239,9 +237,10 @@ changeCode <- function(data = codesJoined,
   return(data)
 } 
 
-gitHubCorrections <- function() {
+gitHubCorrections <- function(wrong_codes, 
+                              correct_codes) {
   
-  codesJoined <- merge(codesWrong, codesCorrect, by = c("Country"), all = TRUE)
+  codesJoined <- merge(wrong_codes, correct_codes, by = c("Country"), all = TRUE)
   
   codesJoined %<>% 
     changeCode(country = "Brunei", 
@@ -290,30 +289,33 @@ transposeData <- function(data, value_name) {
   return(data)
 }
 
-
 ######################################################
 ##### ADD ADD-ON DATA
 ######################################################
-addExtraDataToDeaths <- function(data) {
+addExtraDataToDeaths <- function(covid_data, 
+                                 population_data, 
+                                 density_data, 
+                                 regional_data, 
+                                 demographic_data) {
   # Add total population data. 
-  data %<>%  
-    merge(table_populations[, c("alpha.3", 
+  covid_data %<>%  
+    merge(population_data[, c("alpha.3", 
                                 "Population_2018")], 
           by = c("alpha.3"), 
           all.x = TRUE)
   
-  data %<>% 
-    mutate(deathPerCapita = round(((confirmedDeaths/Population_2018)*100000),2))
+  covid_data %<>% 
+    mutate(deathPerCapita = round(((confirmedDeaths / Population_2018) * 100000),2))
   
   # Add population density data. 
-  data %<>%  
-    merge(table_density[, c("alpha.3",
+  covid_data %<>%  
+    merge(density_data[, c("alpha.3",
                             "populationDensity_2018")], 
           by = c("alpha.3"), 
           all.x = TRUE)
   
   # We create the density groups based on categories made by the US Department of Agriculture (Wikipedia).
-  data %<>% 
+  covid_data %<>% 
     mutate(populationDensityGroup = ifelse(populationDensity_2018 < 10, "<10/km2",
                                            ifelse(populationDensity_2018 < 40, "10-40/km2",
                                                   ifelse(populationDensity_2018 < 100, "40-100/km2",
@@ -321,35 +323,40 @@ addExtraDataToDeaths <- function(data) {
                                                                 ">500/km2")))))
   
   # Add regional category data. 
-  data %<>%  
-    merge(table_regions[, c("alpha.3", 
+  covid_data %<>%  
+    merge(regional_data[, c("alpha.3", 
                             "region", 
                             "sub.region", 
                             "intermediate.region")], 
           by = c("alpha.3"), 
           all.x = TRUE)
   
-  data %<>% 
+  covid_data %<>% 
     rename(Region = "region",
            subRegion = "sub.region",
            intermediateRegion = "intermediate.region")
   
   # Add demographic (age) data. 
-  data %<>%  
-    merge(table_demographics[, c("alpha.3",
+  covid_data %<>%  
+    merge(demographic_data[, c("alpha.3",
                                  "percentageAbove65_2018")], 
           by = c("alpha.3"), 
           all.x = TRUE)
   
   # Many countries have about 2-3% 65+ year-olds. If we do five categories, it could look like this... 
-  data %<>% 
+  covid_data %<>% 
     mutate(ageAbove65Group = ifelse(percentageAbove65_2018 < 1, "<1%",
                                     ifelse(percentageAbove65_2018 < 3, "1-3%",
                                            ifelse(percentageAbove65_2018 < 10, "3-10%",
                                                   ifelse(percentageAbove65_2018 < 20, "10-20%",
                                                          ">20%")))))
   
-  return(data)
+  return(covid_data)
   
 }
+
+
+
+
+
 
